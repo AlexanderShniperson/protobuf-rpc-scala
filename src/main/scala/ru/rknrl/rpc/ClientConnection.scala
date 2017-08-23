@@ -13,19 +13,22 @@ import java.net.InetSocketAddress
 import akka.actor.{ActorRef, Props}
 import akka.io.Tcp._
 import akka.io.{IO, Tcp}
-import ru.rknrl.rpc.Connection.ConnectionClosedException
 
-object Connection {
+object ClientConnection {
   def props(host: String, port: Int, acceptWithActor: ActorRef ⇒ Props, serializer: Serializer) =
-    Props(classOf[Connection], host, port, acceptWithActor, serializer)
+    Props(classOf[ClientConnection], host, port, acceptWithActor, serializer)
+
+  case object ConnectionOpened
 
   class ConnectionClosedException extends Exception
 }
 
-class Connection(host: String, port: Int, acceptWithActor: ActorRef ⇒ Props, serializer: Serializer) extends ClientSessionBase(acceptWithActor, serializer) {
-  val address = new InetSocketAddress(host, port)
+class ClientConnection(host: String, port: Int, acceptWithActor: ActorRef ⇒ Props, serializer: Serializer) extends ClientSessionBase(acceptWithActor, serializer) {
 
+  import ru.rknrl.rpc.ClientConnection.{ConnectionClosedException, ConnectionOpened}
   import context.system
+
+  val address = new InetSocketAddress(host, port)
 
   var tcp: ActorRef = _
 
@@ -46,6 +49,7 @@ class Connection(host: String, port: Int, acceptWithActor: ActorRef ⇒ Props, s
 
       tcp = sender
       tcp ! Register(self)
+      client ! ConnectionOpened
   }
 
   override def receive = connectionReceive orElse super.receive
