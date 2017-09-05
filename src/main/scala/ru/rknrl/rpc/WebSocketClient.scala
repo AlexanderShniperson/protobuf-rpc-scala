@@ -56,15 +56,12 @@ class WebSocketClient(serverUrl: String,
     case msg: GeneratedMessage ⇒ sendToServer(msg)
 
     case BinaryMessage.Strict(receivedData) ⇒
-      val data = receiveBuffer ++ receivedData
-      val (newBuffer, frames) = extractFrames(data, Nil)
-      for (frame ← frames) {
-        clientRef.foreach(_ ! serializer.bytesToMessage(frame.msgId, frame.byteString))
-      }
-      receiveBuffer = newBuffer
+      parseReceivedData(receivedData)
 
-    case _: BinaryMessage.Streamed ⇒
-      log.warning("Received BinaryMessage.Streamed")
+    case BinaryMessage.Streamed(receivedData) ⇒
+      receivedData.runForeach { data ⇒
+        parseReceivedData(data)
+      }
 
     case any ⇒ log.warning(s"Unhandled message <$any>")
   }
@@ -92,6 +89,15 @@ class WebSocketClient(serverUrl: String,
 
   override def postStop(): Unit = {
     super.postStop()
+  }
+
+  def parseReceivedData(receivedData: ByteString): Unit = {
+    val data = receiveBuffer ++ receivedData
+    val (newBuffer, frames) = extractFrames(data, Nil)
+    for (frame ← frames) {
+      clientRef.foreach(_ ! serializer.bytesToMessage(frame.msgId, frame.byteString))
+    }
+    receiveBuffer = newBuffer
   }
 
   def sendToServer(msg: GeneratedMessage): Unit = {

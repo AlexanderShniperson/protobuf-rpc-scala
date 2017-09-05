@@ -5,7 +5,7 @@ name := "rpc"
 version := "1.0"
 
 scalaVersion := "2.11.11"
-val akkaVersion = "2.5.1"
+val akkaVersion = "2.4.19"
 val akkaHttpV = "10.0.9"
 
 libraryDependencies ++= Seq(
