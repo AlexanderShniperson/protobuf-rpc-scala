@@ -15,7 +15,7 @@ import javax.net.ssl.{KeyManagerFactory, SSLContext, TrustManagerFactory}
 import akka.http.scaladsl.{ConnectionContext, HttpsConnectionContext}
 */
 
-import akka.actor.{Actor, ActorLogging, ActorRef, Props, Terminated}
+import akka.actor.{Actor, ActorLogging, ActorRef, Props}
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.model.ws._
 import akka.http.scaladsl.server.Directives._
@@ -45,55 +45,24 @@ private class WebSocketServer(host: String,
   implicit val materializer = ActorMaterializer()
 
   private var bindingFuture = Option.empty[Future[Http.ServerBinding]]
-  var clients = Map.empty[String, ActorRef] // key -> remoteClient; value -> clientSession
 
   override def receive = {
-    case WebClientConnected(ref) ⇒
-      val clientSession = context.actorOf(WebSocketClientSession.props(ref, acceptWithActor, serializer))
-      context.watch(ref)
-      clients = clients.updated(parseClientRef(ref), clientSession)
-
-    case msg: BinaryMessage.Strict ⇒
-      clients.get(parseClientRef(sender())) match {
-        case None ⇒ log.warning(s"Received message from unknown remote client <${parseClientRef(sender())}>")
-        case Some(clientSession) ⇒ clientSession forward msg
-      }
-
-    case _: BinaryMessage.Streamed ⇒
-      log.warning("Received BinaryMessage.Streamed")
-
-    case Terminated(ref) ⇒
-      clientDisconnected(ref)
-
-    case WebClientDisconnected ⇒
-      clientDisconnected(sender())
-  }
-
-  def clientDisconnected(ref: ActorRef): Unit = {
-    clients.get(parseClientRef(ref)).foreach { clientSession ⇒
-      context.stop(clientSession)
-      clients -= parseClientRef(ref)
-    }
-  }
-
-  def parseClientRef(ref: ActorRef): String = {
-    val name = ref.path.name
-      .replace("actorRefSource", "actorRef")
-      .replace("actorRefSink", "actorRef")
-      .replace("-1-", "-") // flow actor Sink
-      .replace("-2-", "-") // flow actor Source
-    ref.path.toStringWithoutAddress
-      .replace(ref.path.name, name)
+    case _ ⇒
   }
 
   def flow(): Flow[Message, Message, Any] = {
-    val in = Sink.actorRef(self, WebClientDisconnected)
-    val out = Source.actorRef(8, OverflowStrategy.fail).mapMaterializedValue { ref ⇒
-      self ! WebClientConnected(ref)
-      ref
+    val clientRef = context.actorOf(WebSocketClientSession.props(acceptWithActor, serializer))
+
+    val in = Sink.actorRef(clientRef, WebClientDisconnected)
+
+    val out = Source.actorRef(8, OverflowStrategy.fail).mapMaterializedValue { a ⇒
+      clientRef ! WebClientConnected(a)
+      a
     }
+
     Flow.fromSinkAndSource(in, out)
   }
+
 
   override def preStart(): Unit = {
     /* SSL
@@ -137,4 +106,3 @@ private class WebSocketServer(host: String,
     super.postStop()
   }
 }
-
