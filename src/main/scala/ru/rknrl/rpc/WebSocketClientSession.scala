@@ -13,6 +13,7 @@ import akka.http.scaladsl.model.ws.BinaryMessage
 import akka.stream.ActorMaterializer
 import akka.util.ByteString
 import com.trueaccord.scalapb.GeneratedMessage
+import ru.rknrl.rpc.ClientSession.CloseConnection
 import ru.rknrl.rpc.WebSocketServer.{WebClientConnected, WebClientDisconnected}
 
 object WebSocketClientSession {
@@ -51,7 +52,11 @@ private class WebSocketClientSession(acceptWithActor: ActorRef ⇒ Props,
       clientRef = None
       context.stop(self)
 
-    case any ⇒ log.warning(s"Unhandled message <$any>")
+    case CloseConnection ⇒
+      clientRef = None
+      context.stop(self)
+
+    case any ⇒ log.warning(s"Unhandled message <$any> from <$sender>")
   }
 
   override def postStop(): Unit =

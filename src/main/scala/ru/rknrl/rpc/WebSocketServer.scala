@@ -26,8 +26,8 @@ import ru.rknrl.rpc.WebSocketServer.{WebClientConnected, WebClientDisconnected}
 import scala.concurrent.Future
 
 object WebSocketServer {
-  def props(host: String, port: Int, acceptWithActor: ActorRef ⇒ Props, serializer: Serializer): Props = {
-    Props(classOf[WebSocketServer], host, port, acceptWithActor, serializer)
+  def props(host: String, port: Int, acceptWithActor: ActorRef ⇒ Props, serializer: Serializer, messagePoolSize: Int): Props = {
+    Props(classOf[WebSocketServer], host, port, acceptWithActor, serializer, messagePoolSize)
   }
 
   case class WebClientConnected(ref: ActorRef)
@@ -39,7 +39,8 @@ object WebSocketServer {
 private class WebSocketServer(host: String,
                               port: Int,
                               acceptWithActor: ActorRef ⇒ Props,
-                              serializer: Serializer) extends Actor with ActorLogging {
+                              serializer: Serializer,
+                              messagePoolSize: Int) extends Actor with ActorLogging {
 
   implicit val as = context.system
   implicit val materializer = ActorMaterializer()
@@ -55,7 +56,7 @@ private class WebSocketServer(host: String,
 
     val in = Sink.actorRef(clientRef, WebClientDisconnected)
 
-    val out = Source.actorRef(8, OverflowStrategy.fail).mapMaterializedValue { a ⇒
+    val out = Source.actorRef(messagePoolSize, OverflowStrategy.fail).mapMaterializedValue { a ⇒
       clientRef ! WebClientConnected(a)
       a
     }
