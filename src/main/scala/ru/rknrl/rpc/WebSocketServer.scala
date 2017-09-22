@@ -30,9 +30,9 @@ object WebSocketServer {
     Props(classOf[WebSocketServer], host, port, acceptWithActor, serializer, messagePoolSize)
   }
 
-  case class WebClientConnected(ref: ActorRef)
+  private[rpc] case class WebClientConnected(ref: ActorRef)
 
-  case object WebClientDisconnected
+  private[rpc] case object WebClientDisconnected
 
 }
 
