@@ -17,6 +17,7 @@ import akka.stream.{ActorMaterializer, OverflowStrategy}
 import akka.stream.scaladsl.{Keep, Sink, Source}
 import akka.util.ByteString
 import com.trueaccord.scalapb.GeneratedMessage
+import ru.rknrl.rpc.ClientSession.CloseConnection
 import ru.rknrl.rpc.WebSocketServer.{WebClientConnected, WebClientDisconnected}
 
 import scala.concurrent.Future
@@ -47,10 +48,14 @@ class WebSocketClient(serverUrl: String,
       clientRef = Some(context.actorOf(acceptWithActor(self)))
 
     case Terminated(ref) if serverRef.contains(ref) ⇒
-      serverRef = None
       context.stop(self)
 
     case WebClientDisconnected ⇒
+      serverRef.foreach(context.stop)
+      context.stop(self)
+
+    case CloseConnection ⇒
+      serverRef.foreach(context.stop)
       context.stop(self)
 
     case msg: GeneratedMessage ⇒ sendToServer(msg)
@@ -77,14 +82,13 @@ class WebSocketClient(serverUrl: String,
         .toMat(in)(Keep.both) // also keep the Future[Done]
         .run()
     import context.dispatcher
-    val connected = upgradeResponse.flatMap { upgrade ⇒
+    upgradeResponse.flatMap { upgrade ⇒
       if (upgrade.response.status == StatusCodes.SwitchingProtocols) {
         Future.successful(Done)
       } else {
         throw new RuntimeException(s"Connection failed: ${upgrade.response.status}")
       }
     }
-    closed.foreach(_ ⇒ log.warning("closed"))
   }
 
   override def postStop(): Unit = {
