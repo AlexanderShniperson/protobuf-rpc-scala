@@ -26,6 +26,9 @@ object WebSocketClient {
   def props(serverUrl: String, acceptWithActor: ActorRef ⇒ Props, serializer: Serializer) = {
     Props(classOf[WebSocketClient], serverUrl, acceptWithActor, serializer)
   }
+
+  case object WebClientDisconnected
+
 }
 
 class WebSocketClient(serverUrl: String,
@@ -47,11 +50,13 @@ class WebSocketClient(serverUrl: String,
       context.watch(ref)
       clientRef = Some(context.actorOf(acceptWithActor(self)))
 
-    case Terminated(ref) if serverRef.contains(ref) ⇒
+    case Terminated(ref) ⇒
+      clientRef.foreach(_ ! WebSocketClient.WebClientDisconnected)
       context.stop(self)
 
     case WebClientDisconnected ⇒
       serverRef.foreach(context.stop)
+      clientRef.foreach(_ ! WebSocketClient.WebClientDisconnected)
       context.stop(self)
 
     case CloseConnection ⇒
